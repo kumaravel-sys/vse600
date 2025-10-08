@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VSE Stock Trainer</title>
+<style>
+body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; margin:0; padding:0; background:#f5f7fb; color:#111; }
+header { background:#0f1724; color:white; padding:12px 20px; display:flex; justify-content:space-between; align-items:center }
+header h1 { margin:0; font-size:18px }
+.container { padding:20px; max-width:1100px; margin:24px auto; background:white; border-radius:10px; box-shadow:0 6px 20px rgba(10,20,40,0.06) }
+.row { display:flex; gap:16px; align-items:flex-start; flex-wrap:wrap; }
+input, button, select { padding:10px; border-radius:6px; border:1px solid #cbd5e1; font-size:14px }
+button { cursor:pointer; background:#0f1724; color:white; border:none }
+.hidden { display:none }
+.left { flex:1; min-width:320px }
+.right { width:400px; min-width:300px }
+.search-suggestions { background:#fff; border:1px solid #e2e8f0; margin-top:6px; max-height:200px; overflow:auto; border-radius:6px; position:absolute; z-index:10; }
+.suggest-item { padding:8px; cursor:pointer; border-bottom:1px solid #f1f5f9 }
+.suggest-item:hover { background:#f8fafc }
+table { width:100%; border-collapse:collapse; margin-top:12px }
+th, td { text-align:left; padding:8px; border-bottom:1px solid #f1f5f9 }
+.card { padding:12px; border-radius:8px; background:#fff; box-shadow:0 4px 10px rgba(15,23,42,0.04); margin-bottom:12px }
+.small { font-size:13px; color:#475569 }
+.danger { color:#dc2626 }
+footer { text-align:center; padding:16px; color:#475569; font-size:13px }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>VSE Stock Trainer</h1>
+  <div id="header-actions"></div>
+</header>
+
+<main class="container">
+
+  <!-- LOGIN -->
+  <section id="view-login">
+    <h2>Login / Sign Up</h2>
+    <p class="small">Use any email & password. Virtual balance: ₹100,000. Admin: <b>admin6@vse.com</b></p>
+    <div style="max-width:520px">
+      <input id="email" type="email" placeholder="Email" style="width:100%; margin-bottom:8px" />
+      <input id="password" type="password" placeholder="Password" style="width:100%; margin-bottom:8px" />
+      <div style="display:flex; gap:8px;">
+        <button id="btn-login">Login / Create Account</button>
+        <button id="btn-guest" style="background:#334155">Guest</button>
+      </div>
+      <p id="login-msg" class="small" style="margin-top:10px;color:#475569"></p>
+    </div>
+  </section>
+
+  <!-- DASHBOARD -->
+  <section id="view-dashboard" class="hidden">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <h2>Dashboard</h2>
+      <div>
+        <span id="user-email" class="small"></span>
+        <button id="btn-logout" style="margin-left:12px;background:#ef4444">Logout</button>
+      </div>
+    </div>
+
+    <div class="row">
+      <!-- Left: Search & Stock Panel -->
+      <div class="left">
+        <div class="card" style="position:relative">
+          <div style="display:flex; gap:12px; align-items:center;">
+            <input id="search-input" placeholder="Search company (e.g., TCS)" style="flex:1" />
+            <select id="exchange-select">
+              <option value="NSE">NSE</option>
+              <option value="BSE">BSE</option>
+            </select>
+            <button id="btn-search">Search</button>
+          </div>
+          <div id="suggestions" class="search-suggestions hidden"></div>
+        </div>
+
+        <div id="stock-panel" class="card hidden">
+          <h3 id="stock-name">Select a company</h3>
+          <div id="chart-wrap" style="height:400px"></div>
+          <div style="display:flex; gap:10px; margin-top:8px; align-items:center;">
+            <div class="small">Price: <b id="live-price">-</b></div>
+            <div class="small">Symbol: <b id="selected-symbol">-</b></div>
+            <div style="margin-left:auto; display:flex; gap:8px; align-items:center">
+              <input id="qty" type="number" min="1" value="1" style="width:100px"/>
+              <button id="btn-buy">Buy</button>
+              <button id="btn-sell" style="background:#ef4444">Sell</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Portfolio</h3>
+          <div class="small">Balance: <b id="balance">-</b></div>
+          <table id="portfolio-table">
+            <thead><tr><th>Symbol</th><th>Qty</th><th>Avg Price</th><th>Curr Price</th><th>Value</th><th>Action</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Right: Info & Admin -->
+      <div class="right">
+        <div class="card">
+          <h3>Quick Info</h3>
+          <div class="small">Initial virtual capital: <b>₹100,000</b></div>
+          <div class="small" style="margin-top:6px">Twelve Data API status: <span id="api-status">checking...</span></div>
+          <hr/>
+          <h4>Recent Trades</h4>
+          <ul id="trade-log" style="max-height:260px; overflow:auto; padding-left:18px"></ul>
+        </div>
+
+        <div id="admin-link-card" class="card hidden">
+          <h3>Admin Panel</h3>
+          <div class="small">You are admin. <button id="btn-open-admin">Open Admin Panel</button></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ADMIN -->
+  <section id="view-admin" class="hidden">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <h2>Admin Panel</h2>
+      <div>
+        <span class="small">Admin: <b id="admin-email-label"></b></span>
+        <button id="btn-admin-back" style="margin-left:12px;background:#334155">Back</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>All Users (sorted by profit)</h3>
+      <table id="admin-users-table">
+        <thead><tr><th>#</th><th>Email</th><th>Balance</th><th>Holdings</th><th>Total</th><th>Profit/Loss</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  Virtual trading only. Powered by Twelve Data API.
+</footer>
+
+<!-- Firebase -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js";
+import { getFirestore, doc, setDoc, getDoc, updateDoc, collection, getDocs } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js";
+
+// Config
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyBs4jEzCHNAZ-XbEVGaCIw4fOD4OsAYsMM",
+  authDomain: "vse6000-47579.firebaseapp.com",
+  projectId: "vse6000-47579",
+  storageBucket: "vse6000-47579.firebasestorage.app",
+  messagingSenderId: "725559754549",
+  appId: "1:725559754549:web:df1305b267362aa42a967c"
+};
+const TD_API = "c933f15065e54a7b9d8908b084d72de1";
+const ADMIN_EMAIL = "admin6@vse.com";
+const ADMIN_PASSWORD = "adminvse2k25";
+
+const app = initializeApp(FIREBASE_CONFIG);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+// Elements
+const viewLogin = document.getElementById('view-login');
+const viewDashboard = document.getElementById('view-dashboard');
+const viewAdmin = document.getElementById('view-admin');
+const btnLogin = document.getElementById('btn-login');
+const btnGuest = document.getElementById('btn-guest');
+const btnLogout = document.getElementById('btn-logout');
+const emailEl = document.getElementById('email');
+const pwdEl = document.getElementById('password');
+const loginMsg = document.getElementById('login-msg');
+const userEmailLabel = document.getElementById('user-email');
+const balanceEl = document.getElementById('balance');
+const portfolioTableBody = document.querySelector('#portfolio-table tbody');
+const tradeLog = document.getElementById('trade-log');
+const searchInput = document.getElementById('search-input');
+const btnSearch = document.getElementById('btn-search');
+const suggestionsBox = document.getElementById('suggestions');
+const stockPanel = document.getElementById('stock-panel');
+const stockNameEl = document.getElementById('stock-name');
+const chartWrap = document.getElementById('chart-wrap');
+const livePriceEl = document.getElementById('live-price');
+const selectedSymbolEl = document.getElementById('selected-symbol');
+const qtyEl = document.getElementById('qty');
+const btnBuy = document.getElementById('btn-buy');
+const btnSell = document.getElementById('btn-sell');
+const apiStatusEl = document.getElementById('api-status');
+const adminLinkCard = document.getElementById('admin-link-card');
+const btnOpenAdmin = document.getElementById('btn-open-admin');
+const adminUsersTableBody = document.querySelector('#admin-users-table tbody');
+const adminEmailLabel = document.getElementById('admin-email-label');
+const btnAdminBack = document.getElementById('btn-admin-back');
+
+// State
+let currentUser = null;
+let currentUserDoc = null;
+let selectedCompany = null;
+let chartInterval = null;
+
+// Helpers
+function show(view) { viewLogin.classList.add('hidden'); viewDashboard.classList.add('hidden'); viewAdmin.classList.add('hidden'); view.classList.remove('hidden'); }
+function money(x) { return '₹' + Number(x).toLocaleString('en-IN', { maximumFractionDigits: 2 }); }
+async function ensureUserDoc(uid, email) {
+  const ref = doc(db,'users',uid);
+  const snap = await getDoc(ref);
+  if(!snap.exists()) {
+    const initial = { email, balance: 100000, portfolio:{}, trades:[], createdAt: Date.now() };
+    await setDoc(ref, initial);
+    return initial;
+  }
+  return snap.data();
+}
+
+// Twelve Data API
+async function fetchTDQuote(symbol) {
+  const url = `https://api.twelvedata.com/quote?symbol=${encodeURIComponent(symbol)}&apikey=${TD_API}`;
+  const res = await fetch(url);
+  if(!res.ok) throw new Error('Quote fetch failed');
+  const data = await res.json();
+  return data;
+}
+
+// Chart
+function renderChart(symbol) {
+  chartWrap.innerHTML = '<iframe src="https://www.tradingview.com/widgetembed/?symbol='+symbol+'&interval=5&hidesidetoolbar=0&symboledit=1&saveimage=0&toolbarbg=f1f3f6&studies=&theme=light&style=1&locale=en&width=100%&height=400" style="border:0;" width="100%" height="400"></iframe>';
+}
+
+// Refresh UI
+async function refreshUserUI() {
+  if(!currentUser) return;
+  currentUserDoc = await getDoc(doc(db,'users',currentUser.uid)).then(s=>s.data());
+  userEmailLabel.textContent = currentUser.email;
+  balanceEl.textContent = money(currentUserDoc.balance||0);
+
+  // portfolio
+  const portfolio = currentUserDoc.portfolio||{};
+  portfolioTableBody.innerHTML='';
+  const symbols = Object.keys(portfolio);
+  if(symbols.length===0) portfolioTableBody.innerHTML='<tr><td colspan="6" class="small">No holdings yet</td></tr>';
+  else {
+    const prices = await Promise.all(symbols.map(s=>fetchTDQuote(s).catch(()=>({price:0}))));
+    symbols.forEach((sym,idx)=>{
+      const h=portfolio[sym]; const p=prices[idx].price||0;
+      const tr=document.createElement('tr');
+      tr.innerHTML=`<td>${sym}</td><td>${h.quantity}</td><td>${money(h.avgPrice)}</td><td>${p?money(p):'-'}</td><td>${p?money(h.quantity*p):'-'}</td><td><button data-sym="${sym}" class="sell-one">Sell</button></td>`;
+      portfolioTableBody.appendChild(tr);
+    });
+    document.querySelectorAll('.sell-one').forEach(b=>{
+      b.onclick=async()=>{ const sym=b.getAttribute('data-sym'); const q=prompt('Quantity to sell','1'); if(q) await sellStock(sym,Number(q)); };
+    });
+  }
+
+  // trades
+  tradeLog.innerHTML='';
+  (currentUserDoc.trades||[]).slice().reverse().slice(0,50).forEach(t=>{
+    const li=document.createElement('li'); li.className='small';
+    li.textContent=`[${new Date(t.time).toLocaleString()}] ${t.type.toUpperCase()} ${t.symbol} x ${t.qty} @ ${t.price} → ${t.type==='buy'?'spent':'received'} ${money(t.qty*t.price)}`;
+    tradeLog.appendChild(li);
+  });
+
+  // admin link
+  if(currentUser.email===ADMIN_EMAIL) adminLinkCard.classList.remove('hidden'); else adminLinkCard.classList.add('hidden');
+}
+
+// Buy / Sell
+async function buyStock(symbol,qty) {
+  const quote=await fetchTDQuote(symbol); const price=quote.price;
+  if(currentUserDoc.balance<price*qty) return alert('Insufficient balance');
+  const portfolio=currentUserDoc.portfolio||{};
+  if(!portfolio[symbol]) portfolio[symbol]={quantity:qty, avgPrice:price};
+  else {
+    const prev=portfolio[symbol]; const newQty=prev.quantity+qty; const newAvg=((prev.avgPrice*prev.quantity)+(price*qty))/newQty;
+    portfolio[symbol]={quantity:newQty, avgPrice:newAvg};
+  }
+  const trades=currentUserDoc.trades||[]; trades.push({type:'buy',symbol,qty,price,time:Date.now()});
+  await updateDoc(doc(db,'users',currentUser.uid),{balance:currentUserDoc.balance-price*qty,portfolio,trades});
+  await refreshUserUI();
+  alert(`Bought ${qty} of ${symbol} @ ${money(price)}`);
+}
+async function sellStock(symbol,qty) {
+  const holding=currentUserDoc.portfolio[symbol]; if(!holding||holding.quantity<qty) return alert('Not enough qty');
+  const price= (await fetchTDQuote(symbol)).price;
+  holding.quantity-=qty; if(holding.quantity<=0) delete currentUserDoc.portfolio[symbol];
+  const trades=currentUserDoc.trades||[]; trades.push({type:'sell',symbol,qty,price,time:Date.now()});
+  await updateDoc(doc(db,'users',currentUser.uid),{balance:currentUserDoc.balance+price*qty,portfolio:currentUserDoc.portfolio,trades});
+  await refreshUserUI();
+  alert(`Sold ${qty} of ${symbol} @ ${money(price)}`);
+}
+
+// Search
+let suggestTimeout=null;
+searchInput.addEventListener('input',async(e)=>{
+  const q=e.target.value.trim(); if(!q){ suggestionsBox.classList.add('hidden'); return; }
+  if(suggestTimeout) clearTimeout(suggestTimeout);
+  suggestTimeout=setTimeout(async()=>{
+    try{
+      const url=`https://api.twelvedata.com/symbol_search?symbol=${encodeURIComponent(q)}&apikey=${TD_API}`;
+      const res=await fetch(url); const data=await res.json();
+      const items=(data.data||[]).slice(0,10);
+      suggestionsBox.innerHTML='';
+      if(items.length===0) suggestionsBox.innerHTML='<div class="small" style="padding:8px">No results</div>';
+      else items.forEach(it=>{
+        const div=document.createElement('div'); div.className='suggest-item'; div.textContent=`${it.symbol} — ${it.instrument_name}`;
+        div.onclick=()=>selectCompany(it);
+        suggestionsBox.appendChild(div);
+      });
+      suggestionsBox.classList.remove('hidden');
+    }catch(e){ suggestionsBox.innerHTML='<div class="small" style="padding:8px">Search failed</div>'; suggestionsBox.classList.remove('hidden'); }
+  },250);
+});
+
+btnSearch.onclick=()=>{ if(searchInput.value.trim()) selectCompany({symbol:searchInput.value.trim()}); };
+function selectCompany(item){
+  selectedCompany=item; const sym=item.symbol; selectedSymbolEl.textContent=sym; stockNameEl.textContent=`${item.instrument_name||sym} (${sym})`; stockPanel.classList.remove('hidden');
+  renderChart(sym); updatePriceLoop(sym);
+}
+
+// Live price
+let liveInterval=null;
+function updatePriceLoop(symbol){
+  if(liveInterval) clearInterval(liveInterval);
+  const upd=async()=>{ try{ const q=await fetchTDQuote(symbol); livePriceEl.textContent=money(q.price); }catch(e){ livePriceEl.textContent='-'; } };
+  upd(); liveInterval=setInterval(upd,2000);
+}
+
+// EVENTS
+btnBuy.onclick=()=>{ const q=Number(qtyEl.value); if(selectedCompany&&q>0) buyStock(selectedCompany.symbol,q); };
+btnSell.onclick=()=>{ const q=Number(qtyEl.value); if(selectedCompany&&q>0) sellStock(selectedCompany.symbol,q); };
+
+// AUTH
+btnLogin.onclick=async()=>{
+  const email=emailEl.value.trim(), pwd=pwdEl.value.trim();
+  if(!email||!pwd) return loginMsg.textContent='Enter both fields';
+  try{
+    let user=null;
+    if(email===ADMIN_EMAIL && pwd===ADMIN_PASSWORD) user=await signInWithEmailAndPassword(auth,email,pwd);
+    else {
+      try{ user=await signInWithEmailAndPassword(auth,email,pwd); }catch(e){ user=await createUserWithEmailAndPassword(auth,email,pwd); }
+    }
+    currentUser=user.user;
+    await ensureUserDoc(currentUser.uid,currentUser.email);
+    show(viewDashboard); refreshUserUI();
+  }catch(e){ loginMsg.textContent=e.message; }
+};
+btnGuest.onclick=async()=>{ currentUser={uid:'guest',email:'Guest'}; currentUserDoc={balance:100000,portfolio:{},trades:[]}; show(viewDashboard); refreshUserUI(); };
+btnLogout.onclick=async()=>{ await signOut(auth); currentUser=null; currentUserDoc=null; show(viewLogin); };
+
+// Admin panel
+btnOpenAdmin.onclick=async()=>{
+  adminEmailLabel.textContent=currentUser.email;
+  show(viewAdmin); loadAdminUsers();
+};
+btnAdminBack.onclick=()=>{ show(viewDashboard); };
+
+// Load all users
+async function loadAdminUsers(){
+  const col=collection(db,'users');
+  const docs=await getDocs(col);
+  const users=[];
+  for(const d of docs.docs){ const data=d.data(); let total=data.balance; for(const s in data.portfolio||{}){ const h=data.portfolio[s]; const q=await fetchTDQuote(s).catch(()=>({price:0})); total+=(q.price||0)*h.quantity; } users.push({email:data.email,balance:data.balance,holdings:Object.keys(data.portfolio||{}).length,total}); }
+  users.sort((a,b)=>b.total-a.total);
+  adminUsersTableBody.innerHTML='';
+  users.forEach((u,i)=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${i+1}</td><td>${u.email}</td><td>${money(u.balance)}</td><td>${u.holdings}</td><td>${money(u.total)}</td><td class="${u.total-u.balance>=0?'':'danger'}">${money(u.total-u.balance)}</td>`;
+    adminUsersTableBody.appendChild(tr);
+  });
+}
+
+// Check Twelve Data API
+(async()=>{ try{ const r=await fetch(`https://api.twelvedata.com/time_series?symbol=NSE:TCS&interval=1min&apikey=${TD_API}`); if(r.ok) apiStatusEl.textContent='OK'; else apiStatusEl.textContent='Error'; }catch(e){ apiStatusEl.textContent='Error'; })();
+
+// Monitor auth
+onAuthStateChanged(auth,user=>{ if(user){ currentUser=user; show(viewDashboard); refreshUserUI(); }else{ show(viewLogin); } });
+</script>
+
+</body>
+</html>
